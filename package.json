@@ -1,7 +1,7 @@
 {
-  "name": "bakery",
+  "name": "ironss",
   "version": "0.1.0",
-  "description": "Frontend Boilerplate - A Webpack based FrontEnd Starter kit supporting ES6, SCSS and Handlebars",
+  "description": "Ironss Website",
   "main": "index.js",
   "scripts": {
     "create": "node presets.js",
@@ -9,8 +9,8 @@
     "dev:open": "webpack-dev-server --open",
     "build": "webpack"
   },
-  "author": "Denni Bevilacqua",
-  "license": "ISC",
+  "author": "Sajan M",
+  "license": "CC",
   "devDependencies": {
     "@babel/core": "^7.5.5",
     "@babel/preset-env": "^7.5.5",
