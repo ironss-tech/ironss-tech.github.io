@@ -3,11 +3,14 @@
   "version": "0.1.0",
   "description": "Ironss Website",
   "main": "index.js",
+  "homepage": "https://ironss-tech.gitgub.io/website/",
   "scripts": {
     "create": "node presets.js",
     "dev": "webpack-dev-server",
     "dev:open": "webpack-dev-server --open",
-    "build": "webpack"
+    "build": "webpack",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
   },
   "author": "Sajan M",
   "license": "CC",
@@ -35,6 +38,7 @@
   },
   "dependencies": {
     "bootstrap": "^4.5.0",
+    "gh-pages": "^3.1.0",
     "jquery": "^3.5.1",
     "popper.js": "^1.16.1"
   }
