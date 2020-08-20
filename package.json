@@ -3,7 +3,6 @@
   "version": "0.1.1",
   "description": "Ironss Website",
   "main": "index.js",
-  "homepage": "ironss.in",
   "scripts": {
     "create": "node presets.js",
     "dev": "webpack-dev-server",
