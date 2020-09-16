@@ -91,6 +91,8 @@
 "use strict";
 
 
+var stylesInDom = {};
+
 var isOldIE = function isOldIE() {
   var memo;
   return function memorize() {
@@ -131,69 +133,80 @@ var getTarget = function getTarget() {
   };
 }();
 
-var stylesInDom = [];
-
-function getIndexByIdentifier(identifier) {
-  var result = -1;
-
-  for (var i = 0; i < stylesInDom.length; i++) {
-    if (stylesInDom[i].identifier === identifier) {
-      result = i;
-      break;
-    }
-  }
-
-  return result;
-}
-
-function modulesToDom(list, options) {
-  var idCountMap = {};
-  var identifiers = [];
+function listToStyles(list, options) {
+  var styles = [];
+  var newStyles = {};
 
   for (var i = 0; i < list.length; i++) {
     var item = list[i];
     var id = options.base ? item[0] + options.base : item[0];
-    var count = idCountMap[id] || 0;
-    var identifier = "".concat(id, " ").concat(count);
-    idCountMap[id] = count + 1;
-    var index = getIndexByIdentifier(identifier);
-    var obj = {
-      css: item[1],
-      media: item[2],
-      sourceMap: item[3]
+    var css = item[1];
+    var media = item[2];
+    var sourceMap = item[3];
+    var part = {
+      css: css,
+      media: media,
+      sourceMap: sourceMap
     };
 
-    if (index !== -1) {
-      stylesInDom[index].references++;
-      stylesInDom[index].updater(obj);
-    } else {
-      stylesInDom.push({
-        identifier: identifier,
-        updater: addStyle(obj, options),
-        references: 1
+    if (!newStyles[id]) {
+      styles.push(newStyles[id] = {
+        id: id,
+        parts: [part]
       });
+    } else {
+      newStyles[id].parts.push(part);
     }
-
-    identifiers.push(identifier);
   }
 
-  return identifiers;
+  return styles;
+}
+
+function addStylesToDom(styles, options) {
+  for (var i = 0; i < styles.length; i++) {
+    var item = styles[i];
+    var domStyle = stylesInDom[item.id];
+    var j = 0;
+
+    if (domStyle) {
+      domStyle.refs++;
+
+      for (; j < domStyle.parts.length; j++) {
+        domStyle.parts[j](item.parts[j]);
+      }
+
+      for (; j < item.parts.length; j++) {
+        domStyle.parts.push(addStyle(item.parts[j], options));
+      }
+    } else {
+      var parts = [];
+
+      for (; j < item.parts.length; j++) {
+        parts.push(addStyle(item.parts[j], options));
+      }
+
+      stylesInDom[item.id] = {
+        id: item.id,
+        refs: 1,
+        parts: parts
+      };
+    }
+  }
 }
 
 function insertStyleElement(options) {
   var style = document.createElement('style');
-  var attributes = options.attributes || {};
 
-  if (typeof attributes.nonce === 'undefined') {
+  if (typeof options.attributes.nonce === 'undefined') {
     var nonce =  true ? __webpack_require__.nc : undefined;
 
     if (nonce) {
-      attributes.nonce = nonce;
+      options.attributes.nonce = nonce;
     }
   }
 
-  Object.keys(attributes).forEach(function (key) {
-    style.setAttribute(key, attributes[key]);
+  Object.keys(options.attributes).forEach(function (key) {
+    style.setAttribute(key, options.attributes[key]);
   });
 
   if (typeof options.insert === 'function') {
@@ -231,7 +244,7 @@ var replaceText = function replaceText() {
 }();
 
 function applyToSingletonTag(style, index, remove, obj) {
-  var css = remove ? '' : obj.media ? "@media ".concat(obj.media, " {").concat(obj.css, "}") : obj.css; // For old IE
+  var css = remove ? '' : obj.css; // For old IE
 
   /* istanbul ignore if  */
 
@@ -260,8 +273,6 @@ function applyToTag(style, options, obj) {
 
   if (media) {
     style.setAttribute('media', media);
-  } else {
-    style.removeAttribute('media');
   }
 
   if (sourceMap && btoa) {
@@ -319,43 +330,45 @@ function addStyle(obj, options) {
 }
 
 module.exports = function (list, options) {
-  options = options || {}; // Force single-tag solution on IE6-9, which has a hard limit on the # of <style>
+  options = options || {};
+  options.attributes = typeof options.attributes === 'object' ? options.attributes : {}; // Force single-tag solution on IE6-9, which has a hard limit on the # of <style>
   // tags it will allow on a page
 
   if (!options.singleton && typeof options.singleton !== 'boolean') {
     options.singleton = isOldIE();
   }
 
-  list = list || [];
-  var lastIdentifiers = modulesToDom(list, options);
+  var styles = listToStyles(list, options);
+  addStylesToDom(styles, options);
   return function update(newList) {
-    newList = newList || [];
+    var mayRemove = [];
 
-    if (Object.prototype.toString.call(newList) !== '[object Array]') {
-      return;
-    }
+    for (var i = 0; i < styles.length; i++) {
+      var item = styles[i];
+      var domStyle = stylesInDom[item.id];
 
-    for (var i = 0; i < lastIdentifiers.length; i++) {
-      var identifier = lastIdentifiers[i];
-      var index = getIndexByIdentifier(identifier);
-      stylesInDom[index].references--;
-    }
-
-    var newLastIdentifiers = modulesToDom(newList, options);
-
-    for (var _i = 0; _i < lastIdentifiers.length; _i++) {
-      var _identifier = lastIdentifiers[_i];
-
-      var _index = getIndexByIdentifier(_identifier);
-
-      if (stylesInDom[_index].references === 0) {
-        stylesInDom[_index].updater();
-
-        stylesInDom.splice(_index, 1);
+      if (domStyle) {
+        domStyle.refs--;
+        mayRemove.push(domStyle);
       }
     }
 
-    lastIdentifiers = newLastIdentifiers;
+    if (newList) {
+      var newStyles = listToStyles(newList, options);
+      addStylesToDom(newStyles, options);
+    }
+
+    for (var _i = 0; _i < mayRemove.length; _i++) {
+      var _domStyle = mayRemove[_i];
+
+      if (_domStyle.refs === 0) {
+        for (var j = 0; j < _domStyle.parts.length; j++) {
+          _domStyle.parts[j]();
+        }
+
+        delete stylesInDom[_domStyle.id];
+      }
+    }
   };
 };
 
@@ -374,25 +387,23 @@ __webpack_require__.r(__webpack_exports__);
 /* 3 */
 /***/ (function(module, exports, __webpack_require__) {
 
-var api = __webpack_require__(0);
-            var content = __webpack_require__(4);
+var content = __webpack_require__(4);
 
-            content = content.__esModule ? content.default : content;
+if (typeof content === 'string') {
+  content = [[module.i, content, '']];
+}
 
-            if (typeof content === 'string') {
-              content = [[module.i, content, '']];
-            }
-
-var options = {};
+var options = {}
 
 options.insert = "head";
 options.singleton = false;
 
-var update = api(content, options);
+var update = __webpack_require__(0)(content, options);
 
+if (content.locals) {
+  module.exports = content.locals;
+}
 
-
-module.exports = content.locals || {};
 
 /***/ }),
 /* 4 */
